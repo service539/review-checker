@@ -28,6 +28,12 @@ OWNER_REPLY_PHRASES = [
     "Réponse de l'établissement",
     "owner response",
     "Owner's response",
+    # Extra patterns for JS-rendered content
+    "reviewReply",
+    "ownerResponse",
+    "owner_response",
+    "replyText",
+    "\"reply\"",
 ]
 
 class CheckRequest(BaseModel):
@@ -45,7 +51,7 @@ def check_review(data: CheckRequest):
         "api_key": SCRAPER_API_KEY,
         "url": url,
         "render": "true",
-        "country_code": "us",        # Use US IP to avoid EU cookie consent
+        "country_code": "us",
         "keep_headers": "true",
     }
 
@@ -99,13 +105,21 @@ def debug_review(data: CheckRequest):
     )
 
     text = response.text
+
+    # Search for the word "response" and grab surrounding context
+    idx = text.lower().find("response")
+    context_around_response = text[max(0, idx-100):idx+200] if idx != -1 else "NOT FOUND"
+
+    # Also search for "reply"
+    idx2 = text.lower().find("reply")
+    context_around_reply = text[max(0, idx2-100):idx2+200] if idx2 != -1 else "NOT FOUND"
+
     found_phrases = [p for p in OWNER_REPLY_PHRASES if p.lower() in text.lower()]
 
     return {
         "found_phrases": found_phrases,
         "page_length": len(text),
-        "contains_review_word": "review" in text.lower(),
-        "contains_response": "response" in text.lower(),
         "contains_consent": "consent.google.com" in text.lower(),
-        "first_2000_chars": text[:2000]
+        "context_around_response": context_around_response,
+        "context_around_reply": context_around_reply,
     }
