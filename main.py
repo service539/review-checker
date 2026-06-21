@@ -45,12 +45,19 @@ def check_review(data: CheckRequest):
         "api_key": SCRAPER_API_KEY,
         "url": url,
         "render": "true",
-        "country_code": "de"
+        "country_code": "us",        # Use US IP to avoid EU cookie consent
+        "keep_headers": "true",
+    }
+
+    headers = {
+        "Cookie": "CONSENT=YES+; SOCS=CAESEwgDEgk0OTc5NzA4MjQaAmVuIAEaBgiA_LysBg",
+        "Accept-Language": "en-US,en;q=0.9",
     }
 
     response = requests.get(
         "https://api.scraperapi.com/",
         params=payload,
+        headers=headers,
         timeout=120
     )
 
@@ -67,7 +74,6 @@ def check_review(data: CheckRequest):
         "url": url
     }
 
-# DEBUG endpoint - remove after testing
 @app.post("/debug-review")
 def debug_review(data: CheckRequest):
     url = data.url
@@ -76,18 +82,23 @@ def debug_review(data: CheckRequest):
         "api_key": SCRAPER_API_KEY,
         "url": url,
         "render": "true",
-        "country_code": "de"
+        "country_code": "us",
+        "keep_headers": "true",
+    }
+
+    headers = {
+        "Cookie": "CONSENT=YES+; SOCS=CAESEwgDEgk0OTc5NzA4MjQaAmVuIAEaBgiA_LysBg",
+        "Accept-Language": "en-US,en;q=0.9",
     }
 
     response = requests.get(
         "https://api.scraperapi.com/",
         params=payload,
+        headers=headers,
         timeout=120
     )
 
     text = response.text
-
-    # Check which phrases are found
     found_phrases = [p for p in OWNER_REPLY_PHRASES if p.lower() in text.lower()]
 
     return {
@@ -95,5 +106,6 @@ def debug_review(data: CheckRequest):
         "page_length": len(text),
         "contains_review_word": "review" in text.lower(),
         "contains_response": "response" in text.lower(),
+        "contains_consent": "consent.google.com" in text.lower(),
         "first_2000_chars": text[:2000]
     }
