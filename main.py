@@ -14,45 +14,26 @@ OWNER_REPLY_PHRASES = [
     "Réponse du propriétaire",
     "Respuesta del propietario",
     "Reactie van de eigenaar",
-    "Svar från ägaren",
-    "Svar fra ejeren",
-    "Vastaus omistajalta",
     "Resposta do proprietário",
     "Odpowiedź właściciela",
     "Ответ владельца",
-    "Yanıt: İşletme sahibi",
     "オーナーからの返信",
     "来自业主的回复",
-    "來自業主的回覆",
     "업주의 답변",
-    "Réponse de l'établissement",
-    "owner response",
-    "Owner's response",
-    # Extra patterns for JS-rendered content
-    "reviewReply",
-    "ownerResponse",
-    "owner_response",
-    "replyText",
-    "\"reply\"",
 ]
 
 class CheckRequest(BaseModel):
     url: str
 
-@app.get("/")
-def health():
-    return {"status": "running"}
-
-@app.post("/check-review")
-def check_review(data: CheckRequest):
-    url = data.url
-
+def scrape_page(url: str) -> str:
     payload = {
         "api_key": SCRAPER_API_KEY,
         "url": url,
         "render": "true",
         "country_code": "us",
         "keep_headers": "true",
+        "wait": 8000,  # wait 8 seconds for JS to fully render
+        "wait_for": "div[data-review-id]",  # wait for review elements
     }
 
     headers = {
@@ -66,8 +47,15 @@ def check_review(data: CheckRequest):
         headers=headers,
         timeout=120
     )
+    return response.text
 
-    text = response.text
+@app.get("/")
+def health():
+    return {"status": "running"}
+
+@app.post("/check-review")
+def check_review(data: CheckRequest):
+    text = scrape_page(data.url)
     text_lower = text.lower()
 
     owner_reply_exists = any(
@@ -77,42 +65,21 @@ def check_review(data: CheckRequest):
     return {
         "owner_reply": owner_reply_exists,
         "status": "OWNER RESPONSE FOUND" if owner_reply_exists else "RESPONSE REMOVED",
-        "url": url
+        "url": data.url
     }
 
 @app.post("/debug-review")
 def debug_review(data: CheckRequest):
-    url = data.url
+    text = scrape_page(data.url)
 
-    payload = {
-        "api_key": SCRAPER_API_KEY,
-        "url": url,
-        "render": "true",
-        "country_code": "us",
-        "keep_headers": "true",
-    }
-
-    headers = {
-        "Cookie": "CONSENT=YES+; SOCS=CAESEwgDEgk0OTc5NzA4MjQaAmVuIAEaBgiA_LysBg",
-        "Accept-Language": "en-US,en;q=0.9",
-    }
-
-    response = requests.get(
-        "https://api.scraperapi.com/",
-        params=payload,
-        headers=headers,
-        timeout=120
-    )
-
-    text = response.text
-
-    # Search for the word "response" and grab surrounding context
     idx = text.lower().find("response")
-    context_around_response = text[max(0, idx-100):idx+200] if idx != -1 else "NOT FOUND"
+    context_around_response = text[max(0, idx-100):idx+300] if idx != -1 else "NOT FOUND"
 
-    # Also search for "reply"
     idx2 = text.lower().find("reply")
-    context_around_reply = text[max(0, idx2-100):idx2+200] if idx2 != -1 else "NOT FOUND"
+    context_around_reply = text[max(0, idx2-100):idx2+300] if idx2 != -1 else "NOT FOUND"
+
+    idx3 = text.lower().find("owner")
+    context_around_owner = text[max(0, idx3-100):idx3+300] if idx3 != -1 else "NOT FOUND"
 
     found_phrases = [p for p in OWNER_REPLY_PHRASES if p.lower() in text.lower()]
 
@@ -122,4 +89,5 @@ def debug_review(data: CheckRequest):
         "contains_consent": "consent.google.com" in text.lower(),
         "context_around_response": context_around_response,
         "context_around_reply": context_around_reply,
+        "context_around_owner": context_around_owner,
     }
